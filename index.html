@@ -778,6 +778,7 @@ main{flex:1;display:flex;min-height:0}
     </div>
     <div class="filters">
       <select id="cat" aria-label="Category"><option value="All">All categories</option></select>
+      <select id="sub" aria-label="Subcategory" hidden></select>
       <select id="minp" aria-label="Minimum discount">
         <option value="0">Any discount</option>
         <option value="20">20%+</option>
@@ -816,7 +817,7 @@ const CONF = {b:['Exact venue','c-b'], m:['One of several branches','c-m'], a:['
 const today = new Date().toISOString().slice(0,10);
 const DUBAI = [25.15, 55.25];
 
-let me = null, cat = 'All', minp = 0, query = '', tab = 'map';
+let me = null, cat = 'All', sub = 'All', minp = 0, query = '', tab = 'map';
 
 // theme
 const root = document.documentElement;
@@ -860,6 +861,7 @@ function navUrl(o){
 function visible(o){
   if (o.v < today) return false;
   if (cat !== 'All' && o.c !== cat) return false;
+  if (sub !== 'All' && o.s !== sub) return false;
   if (minp && o.p < minp) return false;
   if (query){
     const s = (o.n + ' ' + o.a + ' ' + o.h).toLowerCase();
@@ -941,7 +943,20 @@ document.getElementById('list').addEventListener('click', e => {
 });
 
 // filters
-document.getElementById('cat').onchange = e => { cat = e.target.value; render(); };
+document.getElementById('cat').onchange = e => {
+  cat = e.target.value; sub = 'All';
+  const sel = document.getElementById('sub');
+  if (cat === 'All') { sel.hidden = true; sel.innerHTML = ''; }
+  else {
+    const counts = {};
+    OFFERS.forEach(o => { if (o.c === cat && o.s) counts[o.s] = (counts[o.s] || 0) + 1; });
+    sel.innerHTML = '<option value="All">All ' + esc(cat) + '</option>' +
+      Object.keys(counts).sort().map(s => `<option value="${esc(s)}">${esc(s)} (${counts[s]})</option>`).join('');
+    sel.hidden = Object.keys(counts).length < 2;
+  }
+  render();
+};
+document.getElementById('sub').onchange = e => { sub = e.target.value; render(); };
 document.getElementById('minp').onchange = e => { minp = +e.target.value; render(); };
 document.getElementById('q').oninput = e => { query = e.target.value.trim().toLowerCase(); render(); };
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
