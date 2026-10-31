@@ -840,7 +840,7 @@ function setTiles(){
   }).addTo(map);
 }
 setTiles();
-const cluster = L.markerClusterGroup({showCoverageOnHover:false, maxClusterRadius:45});
+const cluster = L.markerClusterGroup({showCoverageOnHover:false, maxClusterRadius:45, removeOutsideVisibleBounds:false});
 map.addLayer(cluster);
 let meMarker = null, meCircle = null;
 
@@ -904,7 +904,7 @@ function render(){
     const best = arr.reduce((a,b)=> b.p > a.p ? b : a);
     const html = `<span class="pin ${tone(best.p)}">${esc(best.t)}${arr.length>1?`<span class="n">${arr.length}</span>`:''}</span>`;
     const m = L.marker([best.lat, best.lng], {icon: L.divIcon({className:'', html, iconSize:[0,0]})})
-      .bindPopup(popupHtml(arr), {maxWidth:300});
+      .bindPopup(popupHtml(arr), {maxWidth:300, maxHeight: Math.min(280, Math.round(document.getElementById('map').clientHeight * 0.55)), autoPanPadding:[16,16]});
     cluster.addLayer(m);
     arr.forEach(o => markerById[o.id] = m);
   }
