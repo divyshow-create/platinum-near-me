@@ -778,7 +778,7 @@ main{flex:1;display:flex;min-height:0}
     </div>
     <div class="filters">
       <select id="cat" aria-label="Category"><option value="All">All categories</option></select>
-      <select id="sub" aria-label="Subcategory" hidden></select>
+      <select id="subcat" aria-label="Subcategory" hidden></select>
       <select id="minp" aria-label="Minimum discount">
         <option value="0">Any discount</option>
         <option value="20">20%+</option>
@@ -945,7 +945,7 @@ document.getElementById('list').addEventListener('click', e => {
 // filters
 document.getElementById('cat').onchange = e => {
   cat = e.target.value; sub = 'All';
-  const sel = document.getElementById('sub');
+  const sel = document.getElementById('subcat');
   if (cat === 'All') { sel.hidden = true; sel.innerHTML = ''; }
   else {
     const counts = {};
@@ -956,7 +956,7 @@ document.getElementById('cat').onchange = e => {
   }
   render();
 };
-document.getElementById('sub').onchange = e => { sub = e.target.value; render(); };
+document.getElementById('subcat').onchange = e => { sub = e.target.value; render(); };
 document.getElementById('minp').onchange = e => { minp = +e.target.value; render(); };
 document.getElementById('q').oninput = e => { query = e.target.value.trim().toLowerCase(); render(); };
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
