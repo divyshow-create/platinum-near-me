@@ -813,7 +813,7 @@ main{flex:1;display:flex;min-height:0}
 <script>
 let OFFERS = [];
 const PORTAL = 'https://platinumcardoffers.flydubai.com/index.html#/offer-detail/';
-const CONF = {b:['Exact venue','c-b'], m:['One of several branches','c-m'], a:['Area only','c-a'], p:['Approximate','c-p']};
+const CONF = {b:['Exact venue','c-b'], m:['One of several branches','c-m'], a:['Area only','c-a'], p:['Approximate','c-p'], o:['Branch from map data','c-m']};
 const today = new Date().toISOString().slice(0,10);
 const DUBAI = [25.15, 55.25];
 
@@ -854,8 +854,8 @@ function km(a, b){
   return 2*R*Math.asin(Math.sqrt(h));
 }
 const fmtKm = d => d == null ? '' : d < 1 ? `${Math.round(d*1000)} m` : d < 100 ? `${d.toFixed(1)} km` : `${Math.round(d)} km`;
-function navUrl(o){
-  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(o.n.split('|')[0].trim() + ', ' + o.a);
+function navUrl(o, l){
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(o.n.split('|')[0].trim() + ', ' + (l ? l.a : o.a));
 }
 
 function visible(o){
@@ -871,27 +871,35 @@ function visible(o){
 }
 
 // group offers sharing a location into one pin
+function locsOf(o){
+  if (!o._locs) o._locs = (o.b && o.b.length) ? o.b : (o.lat != null ? [{a:o.a, lat:o.lat, lng:o.lng, q:o.q}] : []);
+  return o._locs;
+}
+// one entry per branch; entries at the same spot share a pin
 function groups(list){
   const g = new Map();
   for (const o of list){
-    if (o.lat == null) continue;
-    const k = o.lat.toFixed(4) + ',' + o.lng.toFixed(4);
-    if (!g.has(k)) g.set(k, []);
-    g.get(k).push(o);
+    locsOf(o).forEach((l, i) => {
+      const k = l.lat.toFixed(4) + ',' + l.lng.toFixed(4);
+      if (!g.has(k)) g.set(k, []);
+      g.get(k).push({o, l, i});
+    });
   }
   return [...g.values()];
 }
 
 function popupHtml(arr){
   const head = arr[0];
-  const sameName = arr.every(o => o.n === head.n);
-  let h = `<div class="pop"><h3>${esc(sameName ? head.n : arr.length + ' offers here')}</h3>
-    <div class="addr">${esc(head.a)} <span class="conf ${CONF[head.q][1]}">${CONF[head.q][0]}</span></div>`;
-  for (const o of arr.slice().sort((a,b)=>b.p-a.p)){
+  const sameName = arr.every(e => e.o.n === head.o.n);
+  const hq = CONF[head.l.q] || CONF.a;
+  let h = `<div class="pop"><h3>${esc(sameName ? head.o.n : arr.length + ' offers here')}</h3>
+    <div class="addr">${esc(head.l.a)} <span class="conf ${hq[1]}">${hq[0]}</span></div>`;
+  for (const {o, l} of arr.slice().sort((a,b)=>b.o.p-a.o.p)){
+    const nb = locsOf(o).length;
     h += `<div class="off">${sameName ? '' : `<strong>${esc(o.n)}</strong><br>`}
       <strong style="color:var(--hot)">${esc(o.t)}</strong> · ${esc(o.h)}
-      <small>${esc(o.c)}${o.s ? ' · ' + esc(o.s) : ''} · valid until ${fmtDate(o.v)}</small>
-      <div class="acts"><a href="${navUrl(o)}" target="_blank" rel="noopener">Navigate</a>
+      <small>${esc(o.c)}${o.s ? ' · ' + esc(o.s) : ''} · valid until ${fmtDate(o.v)}${nb > 1 ? ' · ' + nb + ' branches' : ''}</small>
+      <div class="acts"><a href="${navUrl(o, l)}" target="_blank" rel="noopener">Navigate</a>
       <a href="${PORTAL + o.id}" target="_blank" rel="noopener">Offer &amp; T&amp;Cs</a></div></div>`;
   }
   return h + '</div>';
@@ -903,23 +911,27 @@ function render(){
   cluster.clearLayers();
   for (const k in markerById) delete markerById[k];
   for (const arr of groups(list)){
-    const best = arr.reduce((a,b)=> b.p > a.p ? b : a);
+    const best = arr.reduce((a,b)=> b.o.p > a.o.p ? b : a).o;
+    const at = arr[0].l;
     const html = `<span class="pin ${tone(best.p)}">${esc(best.t)}${arr.length>1?`<span class="n">${arr.length}</span>`:''}</span>`;
-    const m = L.marker([best.lat, best.lng], {icon: L.divIcon({className:'', html, iconSize:[0,0]})})
+    const m = L.marker([at.lat, at.lng], {icon: L.divIcon({className:'', html, iconSize:[0,0]})})
       .bindPopup(popupHtml(arr), {maxWidth:300, maxHeight: Math.min(280, Math.round(document.getElementById('map').clientHeight * 0.55)), autoPanPadding:[16,16]});
     cluster.addLayer(m);
-    arr.forEach(o => markerById[o.id] = m);
+    arr.forEach(e => markerById[e.o.id + '|' + e.i] = m);
   }
   renderList(list);
-  const mapped = list.filter(o=>o.lat!=null).length;
+  const mapped = list.filter(o => locsOf(o).length).length;
   document.getElementById('sub').textContent =
     `${mapped} offers on the map · ${list.length - mapped} online/UAE-wide` + (me ? '' : ' · tap Locate me');
 }
 
 function renderList(list){
   const el = document.getElementById('list');
-  let items = list.filter(o => tab === 'map' ? o.lat != null : o.lat == null);
-  items.forEach(o => o._d = (me && o.lat != null) ? km(me, [o.lat, o.lng]) : null);
+  let items = list.filter(o => tab === 'map' ? locsOf(o).length : !locsOf(o).length);
+  items.forEach(o => {
+    o._d = null; o._li = 0;
+    if (me) locsOf(o).forEach((l, i) => { const d = km(me, [l.lat, l.lng]); if (o._d == null || d < o._d){ o._d = d; o._li = i; } });
+  });
   if (tab === 'map') items.sort((a,b) => me ? a._d - b._d : b.p - a.p);
   else items.sort((a,b) => b.p - a.p);
   if (!items.length){ el.innerHTML = '<div class="empty">No offers match these filters.</div>'; return; }
@@ -928,7 +940,7 @@ function renderList(list){
       <div class="badge b-${tone(o.p)}">${esc(o.t)}</div>
       <div class="meta"><b>${esc(o.n)}</b>
         <span>${esc(o.h)}</span>
-        <span>${esc(o.a)}${o.q ? ` <span class="conf ${CONF[o.q][1]}">${CONF[o.q][0]}</span>` : ''}</span></div>
+        <span>${(() => { const ls = locsOf(o), l = ls[o._li || 0]; if (!l) return esc(o.a); const c = CONF[l.q] || CONF.a; return esc(l.a) + (ls.length > 1 ? ` <span class="conf c-m">${ls.length} branches</span>` : ` <span class="conf ${c[1]}">${c[0]}</span>`); })()}</span></div>
       <div class="dist">${fmtKm(o._d)}</div>
     </div>`).join('');
 }
@@ -936,8 +948,8 @@ function renderList(list){
 document.getElementById('list').addEventListener('click', e => {
   const it = e.target.closest('.item'); if (!it) return;
   const o = OFFERS.find(x => x.id === it.dataset.id);
-  if (o.lat == null){ window.open(PORTAL + o.id, '_blank'); return; }
-  const m = markerById[o.id];
+  if (!locsOf(o).length){ window.open(PORTAL + o.id, '_blank'); return; }
+  const m = markerById[o.id + '|' + (o._li || 0)];
   cluster.zoomToShowLayer(m, () => m.openPopup());
   if (innerWidth <= 760) document.getElementById('map').scrollIntoView({behavior:'smooth'});
 });
